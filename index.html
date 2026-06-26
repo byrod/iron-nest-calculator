@@ -1,0 +1,1280 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Iron Nest — Calculateur de tir</title>
+<style>
+  /* ---- Design tokens ---- */
+  :root{
+    --steel:#1c2024;       /* fond acier sombre */
+    --steel-2:#24292e;     /* panneau */
+    --steel-3:#2e353c;     /* surface */
+    --line:#3a424a;        /* rivets / bords */
+    --line-2:#4b5560;
+    --brass:#c8923a;       /* laiton, accent principal */
+    --brass-dim:#8a6526;
+    --amber:#e8b04a;       /* affichage instrument */
+    --ink:#d8dde2;         /* texte */
+    --ink-dim:#8b949e;     /* texte secondaire */
+    --green:#5fae6e;       /* solution valide */
+    --red:#c0564b;         /* hors portée */
+    --paper:#161a1d;       /* écran instrument */
+    --mono:"DM Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --disp:"Oswald","Arial Narrow",sans-serif;
+  }
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:
+      radial-gradient(120% 80% at 50% -10%, #262c32 0%, var(--steel) 55%) fixed,
+      var(--steel);
+    color:var(--ink);
+    font-family:var(--mono);
+    font-size:15px;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+  }
+  .wrap{max-width:1040px;margin:0 auto;padding:28px 20px 80px}
+
+  /* ---- Header ---- */
+  header{
+    border:1px solid var(--line);
+    background:linear-gradient(180deg,var(--steel-2),var(--steel-3));
+    border-radius:6px;
+    padding:18px 22px;
+    display:flex;align-items:baseline;gap:18px;flex-wrap:wrap;
+    position:relative;
+  }
+  header::before,header::after{
+    content:"";position:absolute;width:7px;height:7px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#5a646e,#20262b);
+    box-shadow:0 0 0 1px #11151800;
+    top:10px;
+  }
+  header::before{left:10px} header::after{right:10px}
+  h1{
+    font-family:var(--disp);font-weight:700;letter-spacing:.14em;
+    text-transform:uppercase;margin:0;font-size:24px;color:var(--ink);
+  }
+  h1 b{color:var(--brass)}
+  .sub{color:var(--ink-dim);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+  .lang-switch{margin-left:auto;display:flex;gap:0;border:1px solid var(--line-2);border-radius:4px;overflow:hidden}
+  .lang-switch button{font-family:var(--disp);font-size:11px;font-weight:600;letter-spacing:.08em;
+    background:transparent;color:var(--ink-dim);border:none;padding:5px 11px;cursor:pointer}
+  .lang-switch button.active{background:var(--brass);color:#1a1408}
+  .lang-switch button:not(.active):hover{color:var(--amber)}
+  .help-btn{margin-left:8px;width:28px;height:28px;border-radius:50%;border:1px solid var(--line-2);
+    background:transparent;color:var(--ink-dim);font-family:var(--disp);font-weight:700;font-size:15px;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none}
+  .help-btn:hover{border-color:var(--brass);color:var(--amber)}
+
+  .modal-overlay{position:fixed;inset:0;background:rgba(10,12,14,.72);backdrop-filter:blur(2px);
+    display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;z-index:100;overflow-y:auto}
+  .modal-overlay[hidden]{display:none}
+  .modal{position:relative;max-width:620px;width:100%;background:linear-gradient(180deg,var(--steel-2),#1b2025);
+    border:1px solid var(--line-2);border-radius:8px;padding:26px 28px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .modal-close{position:absolute;top:12px;right:12px;width:28px;height:28px;border:1px solid var(--line-2);
+    border-radius:4px;background:none;color:var(--ink-dim);font-size:13px;cursor:pointer}
+  .modal-close:hover{border-color:var(--red);color:var(--red)}
+  .modal-body h3{font-family:var(--disp);font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+    font-size:16px;color:var(--brass);margin:0 0 4px}
+  .modal-body h4{font-family:var(--disp);font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+    font-size:11px;color:var(--amber);margin:18px 0 6px}
+  .modal-body p{margin:6px 0;font-size:13px;line-height:1.65;color:var(--ink)}
+  .modal-body ol{margin:6px 0;padding-left:20px}
+  .modal-body li{font-size:13px;line-height:1.6;color:var(--ink);margin:3px 0}
+  .modal-body .tip{font-size:12px;color:var(--ink-dim);border-left:2px solid var(--brass-dim);
+    padding-left:10px;margin:12px 0;line-height:1.6}
+  .modal-body b{color:var(--amber);font-weight:600}
+  .modal-body kbd{font-family:var(--mono);font-size:11px;background:var(--paper);border:1px solid var(--line-2);
+    border-radius:3px;padding:1px 5px;color:var(--ink)}
+  .modal-disclaimer{font-size:10.5px;color:var(--ink-dim);margin-top:18px;padding-top:12px;
+    border-top:1px solid var(--line);font-style:italic;line-height:1.5}
+
+  /* ---- Sections ---- */
+  .grid{display:grid;grid-template-columns:1fr;gap:18px;margin-top:18px}
+  @media(min-width:780px){ .grid.cols{grid-template-columns:300px 1fr} }
+  .panel{
+    border:1px solid var(--line);
+    background:linear-gradient(180deg,var(--steel-2),#20252a);
+    border-radius:6px;padding:18px;
+  }
+  .panel h2{
+    font-family:var(--disp);font-weight:600;letter-spacing:.16em;text-transform:uppercase;
+    font-size:12px;color:var(--brass);margin:0 0 14px;
+    display:flex;align-items:center;gap:10px;
+  }
+  .panel h2::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--line-2),transparent)}
+  .panel h2.cible-head::after{order:1}
+  .clear-input{order:2;margin-left:2px;background:none;border:1px solid var(--line-2);border-radius:4px;
+    color:var(--ink-dim);font-size:11px;line-height:1;width:24px;height:22px;cursor:pointer;padding:0;
+    display:flex;align-items:center;justify-content:center;flex:none}
+  .clear-input:hover{border-color:var(--red);color:var(--red)}
+  .clear-input:active{background:var(--red);color:#fff}
+
+  label{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-dim);margin:0 0 5px}
+  .field{margin-bottom:14px}
+  input[type=number],select{
+    width:100%;background:var(--paper);color:var(--amber);
+    border:1px solid var(--line-2);border-radius:4px;
+    font-family:var(--mono);font-size:18px;padding:9px 11px;
+  }
+  input:focus,select:focus{outline:2px solid var(--brass);outline-offset:0;border-color:var(--brass)}
+  select{color:var(--ink);font-size:15px}
+
+  /* ---- Solutions ---- */
+  .sol-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+  @media(min-width:560px){ .sol-grid{grid-template-columns:repeat(3,1fr)} }
+  .sol{
+    border:1px solid var(--line);background:var(--paper);border-radius:5px;
+    padding:13px 14px;position:relative;overflow:hidden;
+    min-height:118px;display:flex;flex-direction:column;
+  }
+  .sol .charge{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim);
+    display:flex;justify-content:space-between;align-items:center}
+  .sol .charge .pips{display:flex;gap:3px}
+  .pip{width:6px;height:11px;border-radius:1px;background:var(--line-2)}
+  .pip.on{background:var(--brass)}
+  .sol .elev{font-family:var(--disp);font-weight:700;font-size:34px;line-height:1.05;margin-top:8px;color:var(--amber)}
+  .sol .elev small{font-size:14px;color:var(--ink-dim);font-family:var(--mono);font-weight:400}
+  .sol .tag{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;margin-top:4px}
+  .sol.ok .tag{color:var(--green)}
+  .sol.bad{opacity:.55}
+  .sol.bad .elev{color:var(--ink-dim);font-size:18px;margin-top:14px}
+  .sol.bad .tag{color:var(--red)}
+  .sol.ok::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--green)}
+  .edge{font-size:10px;color:var(--brass-dim);margin-top:6px;letter-spacing:.04em}
+
+  /* ---- Table editor ---- */
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+  button{
+    font-family:var(--disp);letter-spacing:.1em;text-transform:uppercase;font-size:11px;font-weight:600;
+    background:linear-gradient(180deg,var(--steel-3),#222831);color:var(--ink);
+    border:1px solid var(--line-2);border-radius:4px;padding:8px 13px;cursor:pointer;
+  }
+  button:hover{border-color:var(--brass);color:var(--amber)}
+  button.brass{background:linear-gradient(180deg,var(--brass),var(--brass-dim));color:#1a1408;border-color:#5e451a}
+  button.ghost{background:transparent}
+  .hint{color:var(--ink-dim);font-size:11.5px;margin-top:10px;line-height:1.6}
+
+  .shell-info{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:11px;color:var(--ink-dim)}
+  .shell-info svg{width:18px;height:18px;flex:none;color:var(--brass)}
+  .lbl-row{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+  .lbl-row label{margin:0}
+  .badge{font-family:var(--disp);font-size:9px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+    padding:2px 7px;border-radius:3px;line-height:1.4}
+  .badge.req{background:var(--brass);color:#1a1408}
+  .badge.opt{background:transparent;color:var(--ink-dim);border:1px solid var(--line-2)}
+  .shell-info .cat{color:var(--ink)}
+
+  .io{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+  textarea{width:100%;height:120px;background:var(--paper);color:var(--ink-dim);border:1px solid var(--line);
+    border-radius:4px;font-family:var(--mono);font-size:12px;padding:10px;margin-top:10px;display:none}
+
+  /* ---- bouton épingler sur une solution ---- */
+  .sol .pin{position:absolute;right:8px;bottom:7px;background:none;border:1px solid var(--line-2);
+    color:var(--ink-dim);border-radius:3px;font-size:9px;letter-spacing:.06em;padding:3px 6px;cursor:pointer;
+    text-transform:uppercase;font-family:var(--disp)}
+  .sol.ok .pin:hover{border-color:var(--brass);color:var(--amber)}
+  .sol.bad .pin{display:none}
+
+  /* ---- carnet de cibles ---- */
+  .nb-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+  .counter{font-family:var(--mono);font-size:12px;color:var(--ink-dim)}
+  .counter b{color:var(--amber)}
+  .targets{display:grid;grid-template-columns:1fr;gap:10px;margin-top:14px}
+  @media(min-width:620px){ .targets{grid-template-columns:1fr 1fr} }
+  .tgt{
+    border:1px solid var(--line);background:linear-gradient(180deg,#1b2024,#161a1d);border-radius:5px;
+    padding:12px 14px 12px 44px;position:relative;min-width:0;
+    container-type:inline-size;container-name:tgt;
+  }
+  .tgt::before{
+    content:attr(data-num);
+    position:absolute;left:0;top:0;bottom:0;width:30px;
+    display:flex;align-items:center;justify-content:center;
+    font-family:var(--disp);font-weight:700;font-size:15px;color:var(--brass);
+    background:#12161a;border-right:1px solid var(--line);letter-spacing:.02em;
+  }
+  .tgt.done{opacity:.5}
+  .tgt.done .t-cell .val{text-decoration:line-through;text-decoration-color:var(--line-2)}
+  .t-top{display:flex;align-items:center;gap:10px;margin-bottom:2px}
+  .t-name-wrap{display:flex;align-items:center;gap:8px;flex:1;min-width:0}
+  .t-name-wrap svg{width:16px;height:16px;flex:none;color:var(--brass)}
+  .t-name{font-family:var(--disp);font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+    font-size:13px;color:var(--ink);background:none;border:none;padding:0;flex:1;min-width:0}
+  .t-name:focus{outline:1px solid var(--brass);color:var(--amber)}
+  .t-dist{font-family:var(--mono);font-size:12px;color:var(--ink-dim);white-space:nowrap}
+  .t-dist b{font-family:var(--disp);font-weight:700;font-size:15px;color:var(--ink)}
+  .t-ctrl{display:flex;gap:4px}
+  .t-ctrl button{padding:3px 7px;font-size:9px}
+  .t-readout{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;margin:10px 0 0;
+    background:var(--line);border:1px solid var(--line);border-radius:5px;overflow:hidden}
+  .t-cell{background:var(--paper);padding:10px 4px 9px;text-align:center;min-width:0}
+  .t-cell .lab{font-family:var(--disp);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .t-cell .val{font-family:var(--disp);font-weight:700;font-size:27px;line-height:1.1;color:var(--amber);
+    margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    display:flex;align-items:baseline;justify-content:center;gap:1px;min-height:30px}
+  .t-cell .val small{font-size:13px;color:var(--ink-dim);font-family:var(--mono);font-weight:400}
+  /* le readout s'adapte à la largeur de la CARTE (pas de l'écran) :
+     en dessous de ~360px de carte, on passe en 2×2 pour aérer les valeurs */
+  @container tgt (max-width:360px){
+    .t-readout{grid-template-columns:1fr 1fr}
+    .t-cell{padding:8px 5px 7px}
+    .t-cell .val{font-size:23px;min-height:27px}
+    .t-cell .val small{font-size:11px}
+  }
+  /* très petit écran : rail du numéro et bandeau resserrés */
+  @media(max-width:440px){
+    .tgt{padding:10px 10px 10px 32px}
+    .tgt::before{width:24px;font-size:12px}
+    .t-top{gap:7px}
+    .t-name{font-size:12px}
+    .t-dist{font-size:11px}
+    .t-dist b{font-size:13px}
+  }
+  .t-cell.azim.empty .val,.t-cell.obus.none .val{color:var(--line-2)}
+  .t-cell.clickable{cursor:pointer;transition:background .12s}
+  .t-cell.clickable:hover{background:#1b2127}
+  .t-cell.clickable:hover .val{color:var(--amber)}
+  .tgt.done .t-cell.clickable{cursor:default}
+  .tgt.done .t-cell.clickable:hover{background:var(--paper)}
+  .t-warn{font-size:10px;color:var(--brass-dim);margin-top:6px;letter-spacing:.03em}
+
+  .nb-empty{color:var(--ink-dim);font-size:12.5px;text-align:center;padding:22px 0;border:1px dashed var(--line);
+    border-radius:5px;margin-top:14px}
+
+  /* import d'une liste de cibles (collage texte) */
+  .ocr-zone{margin-top:14px;border-top:1px dashed var(--line);padding-top:14px}
+  .ocr-head b{color:var(--ink);font-family:var(--disp);letter-spacing:.06em;text-transform:uppercase;font-size:12px}
+  .ocr-hint{font-size:11px;margin-top:6px;line-height:1.6;color:var(--ink-dim)}
+  #ocrText{display:block;width:100%;height:84px;background:var(--paper);color:var(--amber);border:1px solid var(--line-2);
+    border-radius:4px;font-family:var(--mono);font-size:14px;padding:9px 11px;margin-top:10px;resize:vertical}
+  #ocrText:focus{outline:2px solid var(--brass);border-color:var(--brass)}
+  .ocr-status{font-size:11.5px;color:var(--ink-dim);margin-top:10px}
+  .ocr-review{margin-top:12px}
+  .ocr-review table{width:100%;border-collapse:collapse;font-size:13px}
+  .ocr-review th{font-family:var(--disp);font-weight:500;letter-spacing:.06em;text-transform:uppercase;font-size:10px;
+    color:var(--ink-dim);text-align:left;padding:5px 6px;border-bottom:1px solid var(--line)}
+  .ocr-review td{padding:3px 6px;border-bottom:1px solid #262c32}
+  .ocr-review input{width:100%;background:#12161a;color:var(--amber);border:1px solid #2b333b;border-radius:3px;
+    padding:5px 7px;font-family:var(--mono);font-size:13px}
+  .ocr-review input.bad{border-color:var(--red);color:var(--red)}
+  .ocr-review td.act{width:30px;text-align:center}
+  .ocr-review .del{background:none;border:none;color:var(--ink-dim);cursor:pointer;font-size:15px}
+  .ocr-review .del:hover{color:var(--red)}
+  .ocr-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .nb-tip{font-size:11px;color:var(--ink-dim);align-self:center;margin-left:4px}
+  .nb-tip b{color:var(--ink);font-weight:600}
+
+  /* ---- saisie rapide : valeur + chevrons ---- */
+  .dial-val{display:flex;align-items:stretch;gap:6px;margin-bottom:10px}
+  .dial-val input{flex:1;text-align:center;font-size:22px;font-weight:500}
+  .chev{width:42px;background:linear-gradient(180deg,var(--steel-3),#222831);border:1px solid var(--line-2);
+    border-radius:4px;color:var(--ink);font-size:18px;cursor:pointer;user-select:none;
+    display:flex;align-items:center;justify-content:center;font-family:var(--disp);touch-action:manipulation}
+  .chev:hover{border-color:var(--brass);color:var(--amber)}
+  .chev:active{background:var(--brass);color:#1a1408}
+  .stepnote{font-size:10px;color:var(--ink-dim);text-align:center;margin:-4px 0 6px;letter-spacing:.04em}
+
+  /* ---- boussole (azimut) ---- */
+  .compass{display:block;margin:4px auto 2px;cursor:pointer;touch-action:none}
+  .compass .ring{fill:var(--paper);stroke:var(--line-2)}
+  .compass .tick{stroke:var(--line-2)}
+  .compass .tick.major{stroke:var(--ink-dim)}
+  .compass .card{fill:var(--ink-dim);font-family:var(--disp);font-weight:600}
+  .compass .needle{stroke:var(--brass);stroke-width:2.5;stroke-linecap:round}
+  .compass .needle-tail{stroke:var(--line-2);stroke-width:2;stroke-linecap:round}
+  .compass .hub{fill:var(--brass)}
+  .compass .hub-zone{fill:rgba(200,146,58,.10);stroke:rgba(200,146,58,.25);stroke-width:1}
+  .compass:hover .hub{fill:var(--amber)}
+  .compass:hover .hub-zone{fill:rgba(200,146,58,.18)}
+  .compass .rdg{fill:var(--amber);font-family:var(--disp);font-weight:700}
+  .compass .rdg-u{fill:var(--ink-dim);font-family:var(--mono)}
+
+  /* ---- règle (distance) ---- */
+  .ruler{position:relative;margin:6px 0 2px;height:54px;background:var(--paper);border:1px solid var(--line-2);
+    border-radius:4px;cursor:pointer;touch-action:none;overflow:hidden}
+  .ruler svg{display:block;width:100%;height:100%}
+  .ruler .rtick{stroke:var(--line-2)}
+  .ruler .rtick.major{stroke:var(--ink-dim)}
+  .ruler .rlab{fill:var(--ink-dim);font-family:var(--mono);font-size:9px}
+  .ruler .cursor{stroke:var(--brass);stroke-width:2}
+  .ruler .cursor-hd{fill:var(--brass)}
+  .ruler-scale{display:flex;justify-content:space-between;font-size:9px;color:var(--ink-dim);margin-top:2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Iron <b>Nest</b> · <span data-i18n="title_word">Calculateur</span></h1>
+    <span class="sub" id="hdrSub">Table de tir → solution d'élévation</span>
+    <div class="lang-switch" id="langSwitch">
+      <button data-lang="fr" class="active">FR</button>
+      <button data-lang="en">EN</button>
+    </div>
+    <button class="help-btn" id="helpBtn" data-i18n-title="help" aria-label="Aide" title="Aide">?</button>
+  </header>
+
+  <!-- MODALE D'AIDE -->
+  <div class="modal-overlay" id="helpOverlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+      <button class="modal-close" id="helpClose" aria-label="Fermer">✕</button>
+      <div class="modal-body" id="helpBody"></div>
+    </div>
+  </div>
+
+  <div class="grid cols">
+    <!-- ENTRÉE -->
+    <section class="panel">
+      <h2 class="cible-head"><span data-i18n="cible">Cible</span><button id="clearInput" class="clear-input" data-i18n-title="clear_input" title="Effacer la cible (distance, azimut, obus)" aria-label="Effacer la saisie">✕</button></h2>
+
+      <div class="lbl-row">
+        <label><span data-i18n="distance">Distance</span> — <span id="distMax">0–30</span> km</label>
+        <span class="badge req" data-i18n="required">requis</span>
+      </div>
+      <div class="dial-val">
+        <button class="chev" id="distDn" aria-label="Diminuer la distance">‹</button>
+        <input type="number" id="dist" step="0.01" placeholder="0.0" inputmode="decimal">
+        <button class="chev" id="distUp" aria-label="Augmenter la distance">›</button>
+      </div>
+      <div class="ruler" id="ruler"><svg viewBox="0 0 300 54" preserveAspectRatio="none" id="rulerSvg"></svg></div>
+      <div class="stepnote" data-i18n="dist_note">glisse pour viser · chevrons ±0.01 · maintiens pour défiler</div>
+
+      <div class="lbl-row" style="margin-top:14px">
+        <label data-i18n="azimuth">Azimut</label>
+        <span class="badge opt" data-i18n="optional">optionnel</span>
+      </div>
+      <div class="dial-val">
+        <button class="chev" id="azimDn" aria-label="Diminuer l'azimut">‹</button>
+        <input type="number" id="azim" step="0.1" placeholder="—" inputmode="decimal">
+        <button class="chev" id="azimUp" aria-label="Augmenter l'azimut">›</button>
+      </div>
+      <svg class="compass" id="compass" width="180" height="180" viewBox="0 0 180 180" role="img" aria-label="Boussole d'azimut"></svg>
+      <div class="stepnote" data-i18n="azim_note">glisse l'aiguille · chevrons ±0.1° · clic au centre = effacer</div>
+
+      <div class="field" style="margin-top:14px">
+        <div class="lbl-row">
+          <label for="shell" data-i18n="shell_type">Type d'obus</label>
+          <span class="badge opt" data-i18n="optional">optionnel</span>
+        </div>
+        <select id="shell"></select>
+        <div class="shell-info" id="shellInfo"></div>
+      </div>
+    </section>
+
+    <!-- SOLUTIONS -->
+    <section class="panel">
+      <h2><span data-i18n="solutions">Solutions de tir</span> <span id="forShell" style="color:var(--ink-dim);font-size:10px;letter-spacing:.04em"></span></h2>
+      <div class="sol-grid" id="solGrid"></div>
+      <p class="hint" id="solHint" data-i18n="sol_prompt">Saisis une distance pour calculer les six solutions de charge.</p>
+    </section>
+  </div>
+
+  <!-- CARNET DE CIBLES -->
+  <section class="panel" style="margin-top:18px">
+    <div class="nb-head">
+      <h2 style="margin:0" data-i18n="notebook">Carnet de cibles</h2>
+      <span class="counter"><span id="nbFlash" style="color:var(--red);margin-right:8px"></span><b id="tgtCount">0</b> / 8 <span data-i18n="saved_count">enregistrées</span></span>
+    </div>
+    <div id="targets" class="targets"></div>
+    <div id="nbEmpty" class="nb-empty" data-i18n="nb_empty">
+      Calcule une solution ci-dessus, puis « Épingler » la charge retenue pour l'ajouter ici.
+      Le carnet garde l'ordre de tir — coche une cible une fois traitée.
+    </div>
+    <div class="toolbar" style="margin-top:14px" id="nbTools">
+      <button class="ghost" id="clearDone" data-i18n="clear_done">Retirer les cibles traitées</button>
+      <button class="ghost" id="clearAll" data-i18n="clear_all">Vider le carnet</button>
+      <span class="nb-tip" id="nbTip"></span>
+    </div>
+
+    <div class="ocr-zone" id="ocrZone">
+      <div class="ocr-head"><b data-i18n="import_title">Importer une liste de cibles</b></div>
+      <textarea id="ocrText" placeholder="55.9° / 5.78km&#10;89.9° / 3.90km&#10;0.0° / 2.73km"></textarea>
+      <div class="ocr-actions">
+        <button class="brass" id="ocrParse" data-i18n="analyze">Analyser</button>
+        <button class="ghost" id="ocrClear" data-i18n="clear">Effacer</button>
+      </div>
+      <div class="ocr-status" id="ocrStatus"></div>
+      <div class="ocr-review" id="ocrReview"></div>
+    </div>
+  </section>
+
+  <!-- SESSION -->
+  <section class="panel" style="margin-top:18px">
+    <h2 data-i18n="session">Session</h2>
+    <div class="io">
+      <button class="ghost" id="exportBtn" data-i18n="export">Exporter (JSON)</button>
+      <button class="ghost" id="importBtn" data-i18n="import">Importer</button>
+    </div>
+    <textarea id="ioArea" placeholder="JSON ici…"></textarea>
+  </section>
+
+</div>
+
+<script>
+"use strict";
+
+/* ---------- Modèle de données ----------
+   data = { shells: { "HE": { 1:[[dist,elev],...], 2:[...], ... 6:[...] }, ... },
+            order: ["HE","AP",...] }
+   Pas de localStorage (non supporté en artifact) : état en mémoire + import/export manuel.
+*/
+const CHARGES = [1,2,3,4,5,6];
+
+/* ---------- Internationalisation FR / EN ---------- */
+let LANG = 'fr';
+try { const saved = localStorage.getItem('ironnest_lang'); if(saved==='fr'||saved==='en') LANG=saved; } catch(e){}
+const I18N = {
+  fr:{
+    title_sub:"Table de tir → solution d'élévation",
+    title_word:"Calculateur",
+    cible:"Cible",
+    clear_input:"Effacer la cible (distance, azimut, obus)",
+    distance:"Distance",
+    required:"requis",
+    optional:"optionnel",
+    dist_note:"glisse pour viser · chevrons ±0.01 · maintiens pour défiler",
+    azimuth:"Azimut",
+    azim_note:"glisse l'aiguille · chevrons ±0.1° · clic au centre = effacer",
+    shell_type:"Type d'obus",
+    blast_radius:"rayon de souffle",
+    illum_radius:"rayon d'éclairage",
+    solutions:"Solutions de tir",
+    sol_prompt:"Saisis une distance pour calculer les six solutions de charge.",
+    sol_tip:"À distance égale, la charge la plus basse donne l'angle le plus haut.",
+    sol_none:"Aucune charge disponible à cette distance.",
+    charge:"Charge",
+    available:"Disponible",
+    unavailable:"Indisponible",
+    one_point:"1 point seul",
+    no_measure:"Aucune mesure",
+    too_close:"trop près — angle sous 12°",
+    out_range:"hors de portée pour cette charge",
+    pin:"Épingler",
+    elevation:"Élévation",
+    obus:"Obus",
+    notebook:"Carnet de cibles",
+    saved_count:"enregistrées",
+    nb_empty:"Calcule une solution ci-dessus, puis « Épingler » la charge retenue pour l'ajouter ici. Le carnet garde l'ordre de tir — coche une cible une fois traitée.",
+    clear_done:"Retirer les cibles traitées",
+    clear_all:"Vider le carnet",
+    confirm_q:"Confirmer ?",
+    nb_tip_a:"Sur une carte : clic gauche / droit sur",
+    nb_tip_b:"et",
+    nb_tip_c:"pour changer.",
+    nb_full:"Carnet plein",
+    nb_full_b:"retire une cible",
+    import_title:"Importer une liste de cibles",
+    import_ph:"55.9° / 5.78km\n89.9° / 3.90km\n0.0° / 2.73km",
+    analyze:"Analyser",
+    clear:"Effacer",
+    ocr_none:"Aucune cible détectée. Une ligne par cible, format « azimut° / distance km ».",
+    ocr_found:"cible(s) détectée(s) — vérifie puis ajoute.",
+    ocr_check:"cible(s) à vérifier.",
+    ocr_cleared:"Liste vidée.",
+    ocr_add:"Ajouter",
+    ocr_add_b:"cible(s) au carnet",
+    cancel:"Annuler",
+    ocr_added:"cible(s) ajoutée(s)",
+    ocr_skipped:"ignorée(s)",
+    th_azim:"Azimut °",
+    th_dist:"Distance km",
+    session:"Session",
+    export:"Exporter (JSON)",
+    import:"Importer",
+    json_invalid:"JSON invalide — attendu un objet avec une liste « targets ».",
+    target:"Cible",
+    mark_done:"Marquer traitée",
+    delete:"Supprimer",
+    obus_pick:"Clic : obus suivant · clic droit : précédent",
+    charge_pick:"Clic : charge suivante · clic droit : précédente",
+    km:"km",
+    warn_single:"⚠ basée sur une seule mesure",
+    help:"Aide"
+  },
+  en:{
+    title_sub:"Firing table → elevation solution",
+    title_word:"Calculator",
+    cible:"Target",
+    clear_input:"Clear target (distance, bearing, shell)",
+    distance:"Range",
+    required:"required",
+    optional:"optional",
+    dist_note:"drag to aim · chevrons ±0.01 · hold to scroll",
+    azimuth:"Bearing",
+    azim_note:"drag the needle · chevrons ±0.1° · click center to clear",
+    shell_type:"Shell type",
+    blast_radius:"blast radius",
+    illum_radius:"illumination radius",
+    solutions:"Firing solutions",
+    sol_prompt:"Enter a range to compute the six charge solutions.",
+    sol_tip:"At equal range, the lowest charge gives the highest angle.",
+    sol_none:"No charge available at this range.",
+    charge:"Charge",
+    available:"Available",
+    unavailable:"Unavailable",
+    one_point:"single point",
+    no_measure:"No data",
+    too_close:"too close — angle below 12°",
+    out_range:"out of range for this charge",
+    pin:"Pin",
+    elevation:"Elevation",
+    obus:"Shell",
+    notebook:"Target log",
+    saved_count:"saved",
+    nb_empty:"Compute a solution above, then “Pin” the chosen charge to add it here. The log keeps firing order — tick a target once handled.",
+    clear_done:"Remove handled targets",
+    clear_all:"Clear log",
+    confirm_q:"Confirm?",
+    nb_tip_a:"On a card: left / right click on",
+    nb_tip_b:"and",
+    nb_tip_c:"to change.",
+    nb_full:"Log full",
+    nb_full_b:"remove a target",
+    import_title:"Import a target list",
+    import_ph:"55.9° / 5.78km\n89.9° / 3.90km\n0.0° / 2.73km",
+    analyze:"Analyse",
+    clear:"Clear",
+    ocr_none:"No target detected. One per line, format “bearing° / range km”.",
+    ocr_found:"target(s) detected — review then add.",
+    ocr_check:"target(s) to review.",
+    ocr_cleared:"List cleared.",
+    ocr_add:"Add",
+    ocr_add_b:"target(s) to log",
+    cancel:"Cancel",
+    ocr_added:"target(s) added",
+    ocr_skipped:"skipped",
+    th_azim:"Bearing °",
+    th_dist:"Range km",
+    session:"Session",
+    export:"Export (JSON)",
+    import:"Import",
+    json_invalid:"Invalid JSON — expected an object with a “targets” list.",
+    target:"Target",
+    mark_done:"Mark handled",
+    delete:"Delete",
+    obus_pick:"Click: next shell · right-click: previous",
+    charge_pick:"Click: next charge · right-click: previous",
+    km:"km",
+    warn_single:"⚠ based on a single measurement",
+    help:"Help"
+  }
+};
+function t(k){ return (I18N[LANG] && I18N[LANG][k]) || k; }
+
+function blankShell(){ const o={}; CHARGES.forEach(c=>o[c]=[]); return o; }
+
+/* Table de tir partagée par tous les obus (modèle linéaire du jeu).
+   Bornes [distance_mini, 12°] → [distance_maxi, 60°] par charge. */
+const FIRING_TABLE = {
+  1: [[1, 12], [5, 60]],
+  2: [[2, 12], [10, 60]],
+  3: [[3, 12], [15, 60]],
+  4: [[4, 12], [20, 60]],
+  5: [[5, 12], [25, 60]],
+  6: [[6, 12], [30, 60]]
+};
+
+/* Catalogue des obus. Tous partagent FIRING_TABLE (même trajectoire) ;
+   ils diffèrent par l'effet : catégorie de cible, rayon, icône.
+   Noms = ceux du jeu (non traduits). Catégories = bilingues. */
+const SHELLS = [
+  {id:"HCHE",    name:"HCHE",         abbr:"HCHE", radius:0.63, kind:"blast", icon:"burst",
+    cat:{fr:"Polyvalent · souterrain · groupé", en:"Versatile · underground · clustered"}},
+  {id:"HE",      name:"HE",           abbr:"HE",   radius:0.27, kind:"blast", icon:"burst",
+    cat:{fr:"Artillerie · infanterie · méca", en:"Artillery · infantry · mech"}},
+  {id:"AP",      name:"AP",           abbr:"AP",   radius:0.14, kind:"blast", icon:"pierce",
+    cat:{fr:"Blindé · souterrain · caches", en:"Armoured · underground · caches"}},
+  {id:"STAR",    name:"S.T.A.R",      abbr:"STAR", radius:12.74,kind:"illum", icon:"flare",
+    cat:{fr:"Éclairant", en:"Illumination"}},
+  {id:"PHOSGENE",name:"PHOSGENE GAS", abbr:"PHOS", radius:1.85, kind:"blast", icon:"gas",
+    cat:{fr:"Infanterie · émeute (pas blindé)", en:"Infantry · riot (not armoured)"}},
+  {id:"SMOKE",   name:"SMOKE",        abbr:"SMOKE",radius:1.86, kind:"blast", icon:"smoke",
+    cat:{fr:"Écran · non létal", en:"Screen · non-lethal"}},
+  {id:"TEARGAS", name:"TEAR GAS",     abbr:"TEAR", radius:1.86, kind:"blast", icon:"gas",
+    cat:{fr:"Irritant · non létal", en:"Irritant · non-lethal"}}
+];
+function shellById(id){ return SHELLS.find(s=>s.id===id) || SHELLS[0]; }
+
+/* Icônes SVG inline (héritent currentColor) */
+const ICONS = {
+  burst:'<path d="M12 2l2 6 5-3-3 5 6 2-6 2 3 5-5-3-2 6-2-6-5 3 3-5-6-2 6-2-3-5 5 3z"/>',
+  pierce:'<path d="M12 2l4 8-4 12-4-12z" stroke="currentColor" stroke-width="1.5" fill="none"/>',
+  flare:'<circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4M4 4l3 3M17 17l3 3M20 4l-3 3M7 17l-3 3" stroke="currentColor" stroke-width="1.5"/>',
+  gas:'<path d="M9 4a3 3 0 016 0v2h-6zM7 6h10v3a5 5 0 01-10 0z" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="10" cy="9" r="1"/><circle cx="14" cy="9" r="1"/>',
+  smoke:'<path d="M6 18a4 4 0 01-1-8 5 5 0 019-3 4 4 0 011 8z" fill="none" stroke="currentColor" stroke-width="1.5"/>'
+};
+
+/* data : compat import/export. Tous les obus pointent vers la table partagée. */
+let data = { order: SHELLS.map(s=>s.name), shells:{} };
+SHELLS.forEach(s=>{ data.shells[s.name]=FIRING_TABLE; });
+
+/* ---------- Interpolation ----------
+   Modèle Iron Nest : élévation = pente × distance. Chaque charge n'est
+   SÉLECTIONNABLE que dans une fenêtre d'élévation 12°→60°, soit une distance
+   mini (12°) → maxi (60°). Hors de cette fenêtre la charge est indisponible
+   (cellules à 0 dans la table du jeu).
+   Les deux points saisis par charge SONT les bornes [mini,12] et [maxi,60].
+   Renvoie {elev, status} :
+     'interp' — distance dans la fenêtre → disponible
+     'under'  — distance < borne mini → indisponible (angle < 12°)
+     'over'   — distance > borne maxi → indisponible (hors de portée)
+     'single' — un seul point mesuré
+     null     — aucune mesure */
+function solve(points, dist){
+  const pts = points
+    .filter(p=>Number.isFinite(p[0]) && Number.isFinite(p[1]))
+    .sort((a,b)=>a[0]-b[0]);
+  if(pts.length===0) return {elev:null,status:null};
+  if(pts.length===1) return {elev:pts[0][1],status:'single'};
+
+  const minX=pts[0][0], maxX=pts[pts.length-1][0];
+  if(dist < minX) return {elev:null,status:'under'};
+  if(dist > maxX) return {elev:null,status:'over'};
+
+  for(let i=0;i<pts.length-1;i++){
+    const [x0,y0]=pts[i],[x1,y1]=pts[i+1];
+    if(dist>=x0 && dist<=x1){
+      const t = x1===x0 ? 0 : (dist-x0)/(x1-x0);
+      return {elev:y0+t*(y1-y0),status:'interp'};
+    }
+  }
+  return {elev:null,status:'over'}; // sécurité
+}
+
+function fmt(n){ return (Math.round(n*100)/100).toFixed(2); }
+
+/* ---------- Saisie rapide : boussole + règle ---------- */
+const RULER_MAX = 30;          // portée max du jeu (km)
+const distEl = document.getElementById('dist');
+const azimEl = document.getElementById('azim');
+
+function clampDist(v){ return Math.max(0, Math.min(RULER_MAX, v)); }
+function wrapAz(v){ v=v%360; return v<0?v+360:v; }
+
+function setDist(v, silent){
+  const x=clampDist(Math.round(v*100)/100);    // pas 0.01 km (règle + chevrons)
+  distEl.value = x.toString();
+  drawRuler(x);
+  if(!silent) renderSolutions();
+}
+function setAzim(v, silent){
+  if(v===null){ azimEl.value=''; drawCompass(null); if(!silent) renderSolutions(); return; }
+  const x=Math.round(wrapAz(v)*10)/10;        // pas 0.1° (boussole + chevrons)
+  azimEl.value = (x%1===0)? x.toFixed(0) : x.toFixed(1);
+  drawCompass(x);
+  if(!silent) renderSolutions();
+}
+
+/* --- Boussole --- */
+const compass=document.getElementById('compass');
+const CX=90, CY=90, R=70;
+function buildCompassStatic(){
+  let s='';
+  s+=`<circle class="ring" cx="${CX}" cy="${CY}" r="${R}" stroke-width="1.5"/>`;
+  for(let a=0;a<360;a+=10){
+    const major=(a%90===0), len=major?10:(a%30===0?7:4);
+    const rad=(a-90)*Math.PI/180;
+    const x1=CX+(R-len)*Math.cos(rad), y1=CY+(R-len)*Math.sin(rad);
+    const x2=CX+R*Math.cos(rad), y2=CY+R*Math.sin(rad);
+    s+=`<line class="tick ${major?'major':''}" x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"/>`;
+  }
+  const cards=[['N',0],['E',90],['S',180],['O',270]];
+  cards.forEach(([c,a])=>{
+    const rad=(a-90)*Math.PI/180, rr=R-20;
+    const x=CX+rr*Math.cos(rad), y=CY+rr*Math.sin(rad);
+    s+=`<text class="card" x="${x.toFixed(1)}" y="${(y+4).toFixed(1)}" text-anchor="middle" font-size="13">${c}</text>`;
+  });
+  return s;
+}
+const compassStatic = buildCompassStatic();
+function drawCompass(az){
+  let s=compassStatic;
+  if(az===null){
+    s+=`<text class="rdg" x="${CX}" y="${CY+6}" text-anchor="middle" font-size="20">—</text>`;
+  }else{
+    const rad=(az-90)*Math.PI/180;
+    const nx=CX+(R-14)*Math.cos(rad), ny=CY+(R-14)*Math.sin(rad);
+    const tx=CX-22*Math.cos(rad), ty=CY-22*Math.sin(rad);
+    s+=`<line class="needle-tail" x1="${CX}" y1="${CY}" x2="${tx.toFixed(1)}" y2="${ty.toFixed(1)}"/>`;
+    s+=`<line class="needle" x1="${CX}" y1="${CY}" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}"/>`;
+    const lbl=Number.isInteger(az)?az.toFixed(0):az.toFixed(1);
+    s+=`<text class="rdg" x="${CX}" y="${CY+34}" text-anchor="middle" font-size="19">${lbl}<tspan class="rdg-u" font-size="12">°</tspan></text>`;
+  }
+  s+=`<circle class="hub-zone" cx="${CX}" cy="${CY}" r="18"/>`;
+  s+=`<circle class="hub" cx="${CX}" cy="${CY}" r="7"/>`;
+  compass.innerHTML=s;
+}
+function azFromEvent(e){
+  const r=compass.getBoundingClientRect();
+  const px=e.clientX-r.left;
+  const py=e.clientY-r.top;
+  const sx=px*(180/r.width), sy=py*(180/r.height);
+  const dx=sx-CX, dy=sy-CY;
+  if(Math.hypot(dx,dy)<22) return 'center';     // appui au centre = effacer
+  let a=Math.atan2(dy,dx)*180/Math.PI+90;
+  return wrapAz(a);
+}
+let compassDrag=false;
+function compassPoint(e, isPress){
+  const a=azFromEvent(e);
+  if(a==='center'){
+    if(isPress) setAzim(null);   // appui initial au centre = effacer
+    return;
+  }
+  setAzim(a);
+}
+compass.addEventListener('pointerdown',e=>{
+  compassDrag=true;
+  compass.setPointerCapture(e.pointerId);
+  compassPoint(e,true);
+  e.preventDefault();
+});
+compass.addEventListener('pointermove',e=>{
+  if(compassDrag){ compassPoint(e,false); e.preventDefault(); }
+});
+compass.addEventListener('pointerup',e=>{ compassDrag=false; });
+compass.addEventListener('pointercancel',e=>{ compassDrag=false; });
+
+/* --- Règle --- */
+const ruler=document.getElementById('ruler');
+const rulerSvg=document.getElementById('rulerSvg');
+function drawRuler(d){
+  const W=300,H=54;
+  let s='';
+  for(let km=0;km<=RULER_MAX;km++){
+    const x=(km/RULER_MAX)*W;
+    const major=(km%5===0);
+    s+=`<line class="rtick ${major?'major':''}" x1="${x.toFixed(1)}" y1="0" x2="${x.toFixed(1)}" y2="${major?16:9}"/>`;
+    if(major) s+=`<text class="rlab" x="${Math.min(W-6,Math.max(6,x)).toFixed(1)}" y="${H-4}" text-anchor="middle">${km}</text>`;
+  }
+  const cx=(clampDist(d)/RULER_MAX)*W;
+  s+=`<line class="cursor" x1="${cx.toFixed(1)}" y1="0" x2="${cx.toFixed(1)}" y2="${H}"/>`;
+  s+=`<polygon class="cursor-hd" points="${(cx-5).toFixed(1)},0 ${(cx+5).toFixed(1)},0 ${cx.toFixed(1)},7"/>`;
+  rulerSvg.innerHTML=s;
+}
+function distFromEvent(e){
+  const r=ruler.getBoundingClientRect();
+  const px=e.clientX-r.left;
+  return clampDist((px/r.width)*RULER_MAX);
+}
+let rulerDrag=false;
+function rulerPoint(e){ setDist(distFromEvent(e)); }
+ruler.addEventListener('pointerdown',e=>{
+  rulerDrag=true;
+  ruler.setPointerCapture(e.pointerId);
+  rulerPoint(e);
+  e.preventDefault();
+});
+ruler.addEventListener('pointermove',e=>{
+  if(rulerDrag){ rulerPoint(e); e.preventDefault(); }
+});
+ruler.addEventListener('pointerup',e=>{ rulerDrag=false; });
+ruler.addEventListener('pointercancel',e=>{ rulerDrag=false; });
+
+/* --- Chevrons (avec auto-répétition au maintien) --- */
+function holdRepeat(btn, step){
+  let t,iv;
+  const fire=()=>step();
+  const start=e=>{ e.preventDefault(); fire(); t=setTimeout(()=>{iv=setInterval(fire,60);},350); };
+  const stop=()=>{ clearTimeout(t); clearInterval(iv); };
+  btn.addEventListener('mousedown',start); btn.addEventListener('touchstart',start,{passive:false});
+  ['mouseup','mouseleave','touchend','touchcancel'].forEach(ev=>btn.addEventListener(ev,stop));
+}
+holdRepeat(document.getElementById('distUp'), ()=>setDist((parseFloat(distEl.value)||0)+0.01));
+holdRepeat(document.getElementById('distDn'), ()=>setDist((parseFloat(distEl.value)||0)-0.01));
+holdRepeat(document.getElementById('azimUp'), ()=>setAzim((parseFloat(azimEl.value)||0)+0.1));
+holdRepeat(document.getElementById('azimDn'), ()=>setAzim((parseFloat(azimEl.value)||0)-0.1));
+
+/* --- Clavier sur les champs --- */
+distEl.addEventListener('keydown',e=>{
+  if(e.key==='ArrowUp'||e.key==='ArrowRight'){e.preventDefault();setDist((parseFloat(distEl.value)||0)+0.01);}
+  if(e.key==='ArrowDown'||e.key==='ArrowLeft'){e.preventDefault();setDist((parseFloat(distEl.value)||0)-0.01);}
+});
+azimEl.addEventListener('keydown',e=>{
+  if(e.key==='ArrowUp'||e.key==='ArrowRight'){e.preventDefault();setAzim((parseFloat(azimEl.value)||0)+0.1);}
+  if(e.key==='ArrowDown'||e.key==='ArrowLeft'){e.preventDefault();setAzim((parseFloat(azimEl.value)||0)-0.1);}
+});
+
+/* ---------- Rendu : solutions ---------- */
+function renderSolutions(){
+  const dist = parseFloat(document.getElementById('dist').value);
+  const shell = document.getElementById('shell').value;
+  const grid = document.getElementById('solGrid');
+  const hint = document.getElementById('solHint');
+  document.getElementById('forShell').textContent = shell ? "· "+shell : "";
+  grid.innerHTML='';
+
+  if(!Number.isFinite(dist)){
+    hint.textContent=t('sol_prompt');
+    grid.style.display='none'; return;
+  }
+  grid.style.display='';
+  const tbl = FIRING_TABLE;
+  let anyValid=false;
+
+  CHARGES.forEach(c=>{
+    const {elev,status}=solve(tbl[c]||[],dist);
+    const cell=document.createElement('div');
+
+    // disponible et fiable = pinnable (interp, single). under/over/null = non
+    const usable = elev!==null && status!=='under' && status!=='over';
+    cell.className = usable ? 'sol ok' : 'sol bad';
+
+    const pips=CHARGES.map(i=>`<span class="pip ${i<=c?'on':''}"></span>`).join('');
+    let body, tag, edge='';
+
+    if(status===null){
+      body=`<div class="elev">— —</div>`;
+      tag=`<div class="tag">${t('no_measure')}</div>`;
+    } else if(status==='under'){
+      body=`<div class="elev">— —</div>`;
+      tag='';
+      edge=`<div class="edge">${t('too_close')}</div>`;
+    } else if(status==='over'){
+      body=`<div class="elev">— —</div>`;
+      tag='';
+      edge=`<div class="edge">${t('out_range')}</div>`;
+    } else {
+      anyValid=true;
+      body=`<div class="elev">${fmt(elev)}<small>°</small></div>`;
+      tag='';
+      if(status==='single'){ edge=`<div class="edge">${t('warn_single')}</div>`; }
+    }
+
+    const pin = usable ? `<button class="pin" data-charge="${c}" data-elev="${elev}" data-status="${status}">${t('pin')}</button>` : '';
+    cell.innerHTML=`<div class="charge"><span>${t('charge')} ${c}</span><span class="pips">${pips}</span></div>${body}${tag}${edge}${pin}`;
+    grid.appendChild(cell);
+  });
+
+  hint.textContent = anyValid ? t('sol_tip') : t('sol_none');
+
+  // brancher les boutons « Épingler »
+  grid.querySelectorAll('.pin').forEach(btn=>{
+    btn.onclick=()=>pinTarget(+btn.dataset.charge, parseFloat(btn.dataset.elev), btn.dataset.status);
+  });
+}
+
+/* ---------- Rendu : sélecteur d'obus ---------- */
+function renderShellSelectors(){
+  const s1=document.getElementById('shell');
+  const keep=s1.value;
+  s1.innerHTML='';
+  const blank=document.createElement('option');
+  blank.value=''; blank.textContent='—';
+  s1.appendChild(blank);
+  SHELLS.forEach(s=>{
+    const o=document.createElement('option');
+    o.value=s.name; o.textContent=`${s.name} — ${s.cat[LANG]}`;
+    s1.appendChild(o);
+  });
+  s1.value = SHELLS.some(s=>s.name===keep) ? keep : '';
+  renderShellInfo();
+}
+function shellByName(name){ return SHELLS.find(s=>s.name===name) || null; }
+function iconSvg(name){ return `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${ICONS[name]||ICONS.burst}</svg>`; }
+function renderShellInfo(){
+  const s=shellByName(document.getElementById('shell').value);
+  const box=document.getElementById('shellInfo');
+  if(!s){ box.innerHTML=''; return; }
+  const lbl = s.kind==='illum' ? t('illum_radius') : t('blast_radius');
+  box.innerHTML=
+    `${iconSvg(s.icon)}<span class="cat">${s.cat[LANG]}</span>`+
+    `<span class="rad">${lbl} ${fmt(s.radius)} ${t('km')}</span>`;
+}
+
+/* ---------- Actions ---------- */
+distEl.oninput=()=>{ const v=parseFloat(distEl.value); drawRuler(Number.isFinite(v)?v:0); renderSolutions(); };
+azimEl.oninput=()=>{ const v=parseFloat(azimEl.value); drawCompass(Number.isFinite(v)?wrapAz(v):null); renderSolutions(); };
+azimEl.addEventListener('blur',()=>{ const v=parseFloat(azimEl.value); if(Number.isFinite(v)) setAzim(v); });
+document.getElementById('shell').onchange=()=>{ renderShellInfo(); renderSolutions(); };
+document.getElementById('clearInput').onclick=()=>{
+  distEl.value=''; drawRuler(0);
+  setAzim(null, true);
+  document.getElementById('shell').value=''; renderShellInfo();
+  renderSolutions();
+};
+
+/* ---------- Import / export de session ---------- */
+const ioArea=document.getElementById('ioArea');
+document.getElementById('exportBtn').onclick=()=>{
+  ioArea.style.display='block';
+  ioArea.value=JSON.stringify({targets},null,2);
+  ioArea.select();
+};
+document.getElementById('importBtn').onclick=()=>{
+  if(ioArea.style.display!=='block'){ioArea.style.display='block';ioArea.value='';ioArea.focus();return;}
+  try{
+    const parsed=JSON.parse(ioArea.value);
+    if(!Array.isArray(parsed.targets)) throw new Error("structure");
+    targets=parsed.targets.slice(0,MAX_TARGETS);
+    renderTargets();
+    ioArea.style.display='none';
+  }catch(e){
+    const io=document.getElementById('ioArea');
+    io.style.borderColor='var(--red)';
+    io.placeholder=t('json_invalid');
+    setTimeout(()=>{ io.style.borderColor=''; io.placeholder='JSON ici…'; }, 3000);
+  }
+};
+
+/* ---------- Carnet de cibles ---------- */
+const MAX_TARGETS=8;
+let targets=[]; // {name,dist,shell,azim,charge,elev,status,done}
+
+function flashNb(msg){
+  const el=document.getElementById('nbFlash');
+  el.textContent=msg;
+  clearTimeout(flashNb._t);
+  flashNb._t=setTimeout(()=>{ el.textContent=''; }, 2500);
+}
+function pinTarget(charge, elev, status){
+  if(targets.length>=MAX_TARGETS){
+    flashNb(`${t('nb_full')} (${MAX_TARGETS}) — ${t('nb_full_b')}`);
+    return;
+  }
+  const dist=parseFloat(document.getElementById('dist').value);
+  const shell=document.getElementById('shell').value;
+  const azim=parseFloat(document.getElementById('azim').value);
+  targets.push({
+    name:`${t('target')} ${targets.length+1}`,
+    dist, shell,
+    azim:Number.isFinite(azim)?azim:null,
+    charge, elev, status, done:false
+  });
+  renderTargets();
+}
+
+function renderTargets(){
+  const wrap=document.getElementById('targets');
+  const empty=document.getElementById('nbEmpty');
+  const tools=document.getElementById('nbTools');
+  document.getElementById('tgtCount').textContent=targets.length;
+  wrap.innerHTML='';
+  empty.style.display = targets.length?'none':'block';
+  tools.style.display = targets.length?'flex':'none';
+
+  targets.forEach((t_,i)=>{
+    const card=document.createElement('div');
+    card.className='tgt'+(t_.done?' done':'');
+    card.setAttribute('data-num', String(i+1).padStart(2,'0'));
+    const warn = (t_.status==='single')?`<div class="t-warn">${t('warn_single')}</div>`:'';
+    const azVal = t_.azim!==null
+      ? `${fmt(t_.azim)}<small>°</small>`
+      : `—`;
+    const azEmpty = t_.azim!==null ? '' : ' empty';
+    const sh = shellByName(t_.shell);
+    const nameIcon = sh ? iconSvg(sh.icon) : '';
+    const obusVal = sh ? sh.abbr : '—';
+    const obusNone = sh ? '' : ' none';
+    card.innerHTML=
+      `<div class="t-top">`+
+        `<div class="t-name-wrap">`+
+          nameIcon+
+          `<input class="t-name" value="${(t_.name||'').replace(/"/g,'&quot;')}" data-i="${i}" aria-label="${t('target')}">`+
+        `</div>`+
+        `<span class="t-dist"><b>${fmt(t_.dist)}</b> ${t('km')}</span>`+
+        `<div class="t-ctrl">`+
+          `<button data-done="${i}" title="${t('mark_done')}">${t_.done?'↺':'✓'}</button>`+
+          `<button data-del="${i}" title="${t('delete')}">×</button>`+
+        `</div>`+
+      `</div>`+
+      `<div class="t-readout">`+
+        `<div class="t-cell azim${azEmpty}"><div class="lab">${t('azimuth')}</div><div class="val">${azVal}</div></div>`+
+        `<div class="t-cell elev"><div class="lab">${t('elevation')}</div><div class="val">${fmt(t_.elev)}<small>°</small></div></div>`+
+        `<div class="t-cell obus${obusNone} clickable" data-obus="${i}" title="${sh?sh.name+' — '+sh.cat[LANG]:t('obus_pick')}"><div class="lab">${t('obus')}</div><div class="val">${obusVal}</div></div>`+
+        `<div class="t-cell charge clickable" data-charge="${i}" title="${t('charge_pick')}"><div class="lab">${t('charge')}</div><div class="val">${t_.charge}</div></div>`+
+      `</div>`+warn;
+    wrap.appendChild(card);
+  });
+
+  wrap.querySelectorAll('.t-name').forEach(inp=>{
+    inp.oninput=()=>{ targets[+inp.dataset.i].name=inp.value; };
+  });
+  wrap.querySelectorAll('[data-done]').forEach(b=>{
+    b.onclick=()=>{ const i=+b.dataset.done; targets[i].done=!targets[i].done; renderTargets(); };
+  });
+  wrap.querySelectorAll('[data-del]').forEach(b=>{
+    b.onclick=()=>{ targets.splice(+b.dataset.del,1); renderTargets(); };
+  });
+  wrap.querySelectorAll('[data-charge]').forEach(cell=>{
+    cell.onclick=()=>changeCharge(+cell.dataset.charge, +1);
+    cell.oncontextmenu=(e)=>{ e.preventDefault(); changeCharge(+cell.dataset.charge, -1); };
+  });
+  wrap.querySelectorAll('[data-obus]').forEach(cell=>{
+    cell.onclick=()=>cycleShell(+cell.dataset.obus, +1);
+    cell.oncontextmenu=(e)=>{ e.preventDefault(); cycleShell(+cell.dataset.obus, -1); };
+  });
+}
+
+/* Cycle l'obus d'une cible : aucun → 7 obus → aucun */
+function cycleShell(i, dir){
+  if(targets[i].done) return;
+  const order=['', ...SHELLS.map(s=>s.name)];
+  let idx=order.indexOf(targets[i].shell||'');
+  if(idx<0) idx=0;
+  idx=(idx+dir+order.length)%order.length;
+  targets[i].shell = order[idx];
+  renderTargets();
+}
+
+/* Liste ordonnée des charges disponibles (élévation valide) pour une distance */
+function availableCharges(dist){
+  const out=[];
+  for(const c of CHARGES){
+    const {elev,status}=solve(FIRING_TABLE[c], dist);
+    if(elev!==null && status!=='over' && status!=='under') out.push({c,elev,status});
+  }
+  return out;
+}
+
+/* Change la charge d'une cible vers la disponible suivante/précédente (cycle) */
+function changeCharge(i, dir){
+  const t=targets[i];
+  if(t.done) return;
+  const avail=availableCharges(t.dist);
+  if(avail.length<=1) return;                 // rien à changer
+  let idx=avail.findIndex(a=>a.c===t.charge);
+  if(idx<0) idx=0;
+  idx=(idx+dir+avail.length)%avail.length;    // boucle aux extrémités
+  const pick=avail[idx];
+  t.charge=pick.c; t.elev=pick.elev; t.status=pick.status;
+  renderTargets();
+}
+
+document.getElementById('clearDone').onclick=()=>{
+  targets=targets.filter(t=>!t.done); renderTargets();
+};
+let clearArmed=false, clearTimer=null;
+const clearBtn=document.getElementById('clearAll');
+clearBtn.onclick=()=>{
+  if(targets.length===0) return;
+  if(!clearArmed){
+    clearArmed=true;
+    clearBtn.textContent='Confirmer ?';
+    clearBtn.style.color='var(--red)';
+    clearBtn.style.borderColor='var(--red)';
+    clearTimer=setTimeout(()=>{ resetClearBtn(); }, 3000);
+    return;
+  }
+  clearTimeout(clearTimer); resetClearBtn();
+  targets=[]; renderTargets();
+};
+function resetClearBtn(){
+  clearArmed=false;
+  clearBtn.textContent='Vider le carnet';
+  clearBtn.style.color='';
+  clearBtn.style.borderColor='';
+}
+
+/* ---------- Import d'une liste de cibles (collage texte) ---------- */
+const ocrText=document.getElementById('ocrText');
+const ocrStatus=document.getElementById('ocrStatus');
+const ocrReview=document.getElementById('ocrReview');
+let ocrRows=[];
+
+function ocrCleanNum(s){
+  return s.replace(/[OoQ]/g,'0').replace(/,/g,'.').replace(/[Bb]/g,'8')
+          .replace(/[lI|]/g,'1').replace(/[^0-9.]/g,'').replace(/\.(?=.*\.)/g,'');
+}
+function parseTargetsText(text){
+  const out=[];
+  text.split(/\r?\n/).forEach(line=>{
+    if(!line.includes('/')) return;
+    if(/bearing|range/i.test(line) && !/\d/.test(line)) return;
+    const parts=line.split('/');
+    if(parts.length<2) return;
+    const a=parseFloat(ocrCleanNum(parts[0]));
+    const d=parseFloat(ocrCleanNum(parts[1]));
+    if(!Number.isFinite(a)||!Number.isFinite(d)) return;
+    out.push({azim:a,dist:d});
+  });
+  return out;
+}
+
+function analyzeOcr(){
+  ocrReview.innerHTML='';
+  const rows=parseTargetsText(ocrText.value||'');
+  if(rows.length===0){
+    ocrStatus.textContent=t('ocr_none');
+    ocrRows=[]; return;
+  }
+  ocrRows=rows;
+  ocrStatus.textContent=rows.length+' '+t('ocr_found');
+  renderOcrReview();
+}
+
+function renderOcrReview(){
+  if(ocrRows.length===0){ ocrReview.innerHTML=''; return; }
+  let html='<table><thead><tr><th>'+t('th_azim')+'</th><th>'+t('th_dist')+'</th><th></th></tr></thead><tbody>';
+  ocrRows.forEach((r,i)=>{
+    const aBad = !(r.azim>=0 && r.azim<=360) ? ' bad':'';
+    const dBad = !(r.dist>=0 && r.dist<=30) ? ' bad':'';
+    html+='<tr>'+
+      '<td><input class="oa'+aBad+'" data-i="'+i+'" value="'+r.azim+'" inputmode="decimal"></td>'+
+      '<td><input class="od'+dBad+'" data-i="'+i+'" value="'+r.dist+'" inputmode="decimal"></td>'+
+      '<td class="act"><button class="del" data-del="'+i+'">×</button></td>'+
+    '</tr>';
+  });
+  html+='</tbody></table>'+
+    '<div class="ocr-actions">'+
+      '<button class="brass" id="ocrAdd">'+t('ocr_add')+' '+ocrRows.length+' '+t('ocr_add_b')+'</button>'+
+      '<button class="ghost" id="ocrCancel">'+t('cancel')+'</button>'+
+    '</div>';
+  ocrReview.innerHTML=html;
+
+  ocrReview.querySelectorAll('input.oa').forEach(inp=>inp.oninput=()=>{
+    const v=parseFloat(inp.value); ocrRows[+inp.dataset.i].azim=v;
+    inp.classList.toggle('bad', !(v>=0&&v<=360));
+  });
+  ocrReview.querySelectorAll('input.od').forEach(inp=>inp.oninput=()=>{
+    const v=parseFloat(inp.value); ocrRows[+inp.dataset.i].dist=v;
+    inp.classList.toggle('bad', !(v>=0&&v<=30));
+  });
+  ocrReview.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{
+    ocrRows.splice(+b.dataset.del,1); renderOcrReview();
+    ocrStatus.textContent = ocrRows.length? ocrRows.length+' '+t('ocr_check') : t('ocr_cleared');
+  });
+  document.getElementById('ocrCancel').onclick=()=>{ ocrRows=[]; ocrReview.innerHTML=''; ocrStatus.textContent=''; };
+  document.getElementById('ocrAdd').onclick=addOcrTargets;
+}
+
+function addOcrTargets(){
+  let added=0, skipped=0;
+  for(const r of ocrRows){
+    if(targets.length>=MAX_TARGETS){ skipped++; continue; }
+    const azOk=Number.isFinite(r.azim)&&r.azim>=0&&r.azim<=360;
+    const dOk=Number.isFinite(r.dist)&&r.dist>=0&&r.dist<=30;
+    if(!dOk){ skipped++; continue; }
+    let chosen=null;
+    for(const c of CHARGES){
+      const {elev,status}=solve(FIRING_TABLE[c], r.dist);
+      if(elev!==null && status!=='over' && status!=='under'){ chosen={c,elev,status}; break; }
+    }
+    if(!chosen){ skipped++; continue; }
+    targets.push({
+      name:t('target')+' '+(targets.length+1),
+      dist:Math.round(r.dist*100)/100,
+      shell:'',
+      azim: azOk ? Math.round(r.azim*10)/10 : null,
+      charge:chosen.c, elev:chosen.elev, status:chosen.status, done:false
+    });
+    added++;
+  }
+  ocrRows=[]; ocrReview.innerHTML=''; ocrText.value='';
+  renderTargets();
+  ocrStatus.textContent = added+' '+t('ocr_added')+(skipped?' · '+skipped+' '+t('ocr_skipped'):'')+'.';
+}
+
+document.getElementById('ocrParse').onclick=analyzeOcr;
+document.getElementById('ocrClear').onclick=()=>{ ocrText.value=''; ocrRows=[]; ocrReview.innerHTML=''; ocrStatus.textContent=''; };
+
+
+/* ---------- Application de la langue ---------- */
+function applyLang(){
+  document.documentElement.lang = LANG;
+  document.title = LANG==='en' ? 'Iron Nest — Firing Calculator' : 'Iron Nest — Calculateur de tir';
+  document.querySelectorAll('[data-i18n]').forEach(el=>{ el.textContent = t(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-title]').forEach(el=>{ el.title = t(el.dataset.i18nTitle); });
+  document.getElementById('hdrSub').textContent = t('title_sub');
+  // note carnet (avec mots en gras)
+  document.getElementById('nbTip').innerHTML =
+    t('nb_tip_a')+' <b>'+t('obus')+'</b> '+t('nb_tip_b')+' <b>'+t('charge')+'</b> '+t('nb_tip_c');
+  // boutons d'état langue
+  document.querySelectorAll('#langSwitch button').forEach(b=>{
+    b.classList.toggle('active', b.dataset.lang===LANG);
+  });
+  // re-render des parties dynamiques
+  renderShellSelectors();
+  renderSolutions();
+  renderTargets();
+  // si l'aide est ouverte, la mettre à jour dans la nouvelle langue
+  if(!document.getElementById('helpOverlay').hidden) renderHelp();
+}
+document.querySelectorAll('#langSwitch button').forEach(b=>{
+  b.onclick=()=>{ LANG=b.dataset.lang; try{ localStorage.setItem('ironnest_lang', LANG); }catch(e){} applyLang(); };
+});
+
+/* ---------- Aide (modale) ---------- */
+const HELP = {
+  fr:`
+    <h3>Aide</h3>
+    <p>Calcule la <b>solution de tir</b> (élévation + charge) à partir de la <b>distance</b> d'une cible dans Iron Nest.</p>
+    <h4>Saisie</h4>
+    <ol>
+      <li><b>Distance</b> (requis) : réglette, chevrons, flèches clavier ou frappe. Précision au centième de km.</li>
+      <li><b>Azimut</b> (optionnel) : glisse l'aiguille ou tape la valeur. Clic au centre de la boussole pour effacer.</li>
+      <li><b>Obus</b> (optionnel) : n'influe pas sur l'élévation, seulement sur l'effet.</li>
+    </ol>
+    <p>Les 6 charges s'affichent : clique <b>Épingler</b> sur celle retenue pour l'ajouter au carnet.</p>
+    <h4>Carnet de cibles</h4>
+    <p>Sur une carte : <b>clic gauche / droit</b> sur <b>Obus</b> et <b>Charge</b> pour changer leur valeur (l'élévation se recalcule). Bouton ✓ = cible traitée, ✕ = supprimer.</p>
+    <h4>Importer une liste (capture de texte)</h4>
+    <p>Le jeu affiche les cibles en <b>azimut° / distance km</b>. Au lieu de retaper, extrais le texte directement à l'écran avec l'outil Capture de Windows 11 :</p>
+    <ol>
+      <li>Dans le jeu, ouvre la liste (touche <kbd>Tab</kbd> pour la vue agrandie).</li>
+      <li><kbd>Windows</kbd> + <kbd>Maj</kbd> + <kbd>S</kbd> pour ouvrir la barre de capture, puis clique <b>Text Extractor</b> dans la barre d'outils (en haut).</li>
+      <li>Encadre la zone contenant les lignes : le texte est reconnu aussitôt.</li>
+      <li>Clique <b>Copier tout le texte</b>.</li>
+      <li>Reviens ici, colle (<kbd>Ctrl</kbd> + <kbd>V</kbd>) dans la zone d'import, clique <b>Analyser</b>.</li>
+      <li>Vérifie (le hors-plage est en rouge), corrige, puis <b>Ajoute au carnet</b>.</li>
+    </ol>
+    <p class="tip">Raccourci direct : <kbd>Windows</kbd> + <kbd>Maj</kbd> + <kbd>T</kbd> ouvre Text Extractor sans passer par la barre (selon la version). L'OCR lit mieux un texte <b>net, droit et horizontal</b> (vue Tab) et s'exécute localement, sans envoi sur internet.</p>
+    <h4>Sauvegarde</h4>
+    <p>Les cibles restent en mémoire. <b>Exporter / Importer (JSON)</b> pour garder une session. La langue est mémorisée automatiquement.</p>
+    <div class="modal-disclaimer">Outil non officiel créé par un fan. Iron Nest et ses contenus appartiennent à leurs développeurs respectifs. Sans affiliation.</div>
+  `,
+  en:`
+    <h3>Help</h3>
+    <p>Computes the <b>firing solution</b> (elevation + charge) from a target's <b>range</b> in Iron Nest.</p>
+    <h4>Input</h4>
+    <ol>
+      <li><b>Range</b> (required): ruler, chevrons, keyboard arrows or typing. Precision to the hundredth of a km.</li>
+      <li><b>Bearing</b> (optional): drag the needle or type the value. Click the compass center to clear.</li>
+      <li><b>Shell</b> (optional): does not affect elevation, only the effect on target.</li>
+    </ol>
+    <p>The 6 charges appear: click <b>Pin</b> on the chosen one to add it to the log.</p>
+    <h4>Target log</h4>
+    <p>On a card: <b>left / right click</b> on <b>Shell</b> and <b>Charge</b> to change their value (elevation recomputes). ✓ button = handled, ✕ = delete.</p>
+    <h4>Import a list (text capture)</h4>
+    <p>The game shows targets as <b>bearing° / range km</b>. Instead of retyping, extract the text directly on screen with the Windows 11 Snipping Tool:</p>
+    <ol>
+      <li>In the game, open the list (<kbd>Tab</kbd> for the larger view).</li>
+      <li><kbd>Windows</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd> to open the capture bar, then click <b>Text Extractor</b> in the toolbar (top).</li>
+      <li>Draw a box around the lines: the text is recognised instantly.</li>
+      <li>Click <b>Copy all text</b>.</li>
+      <li>Back here, paste (<kbd>Ctrl</kbd> + <kbd>V</kbd>) into the import box, click <b>Analyse</b>.</li>
+      <li>Review (out-of-range shown in red), fix, then <b>Add to log</b>.</li>
+    </ol>
+    <p class="tip">Direct shortcut: <kbd>Windows</kbd> + <kbd>Shift</kbd> + <kbd>T</kbd> opens Text Extractor without the bar (version-dependent). OCR reads <b>clean, straight, horizontal</b> text (Tab view) best, and runs locally — nothing is uploaded.</p>
+    <h4>Saving</h4>
+    <p>Targets stay in memory. <b>Export / Import (JSON)</b> to keep a session. The language is remembered automatically.</p>
+    <div class="modal-disclaimer">Non-official fan-made tool. Iron Nest and its contents belong to their respective developers. Not affiliated.</div>
+  `
+};
+function renderHelp(){ document.getElementById('helpBody').innerHTML = HELP[LANG]; }
+function openHelp(){ renderHelp(); document.getElementById('helpOverlay').hidden=false; }
+function closeHelp(){ document.getElementById('helpOverlay').hidden=true; }
+document.getElementById('helpBtn').onclick=openHelp;
+document.getElementById('helpClose').onclick=closeHelp;
+document.getElementById('helpOverlay').addEventListener('click',e=>{ if(e.target.id==='helpOverlay') closeHelp(); });
+window.addEventListener('keydown',e=>{ if(e.key==='Escape' && !document.getElementById('helpOverlay').hidden) closeHelp(); });
+
+
+/* ---------- Init ---------- */
+renderShellSelectors();
+renderSolutions();
+renderTargets();
+drawRuler(0);
+drawCompass(null);
+applyLang();
+</script>
+</body>
+</html>
