@@ -186,20 +186,48 @@
   .nb-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
   .counter{font-family:var(--mono);font-size:12px;color:var(--ink-dim)}
   .counter b{color:var(--amber)}
-  .targets{display:grid;grid-template-columns:1fr;gap:10px;margin-top:14px}
+  .targets{display:grid;grid-template-columns:1fr;gap:18px;margin-top:14px}
   @media(min-width:620px){ .targets{grid-template-columns:1fr 1fr} }
+  /* une colonne par canon (gauche / droite), 6 obus chacun */
+  .gun-col{min-width:0;display:flex;flex-direction:column;gap:10px}
+  .gun-hd{display:flex;align-items:center;gap:8px;padding-bottom:8px;border-bottom:1px solid var(--line);
+    font-family:var(--disp);font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:12px;color:var(--ink-dim)}
+  .gun-hd .g-name{color:var(--brass)}
+  .gun-hd .g-count{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--ink-dim)}
+  .gun-hd .g-count b{color:var(--amber)}
+  .gun-pips{display:flex;gap:3px}
+  .gun-pip{width:8px;height:8px;border-radius:50%;border:1px solid var(--line-2);background:transparent}
+  .gun-pip.on{background:var(--amber);border-color:var(--amber)}
+  .gun-list{display:flex;flex-direction:column;gap:10px;min-height:70px}
   .tgt{
     border:1px solid var(--line);background:linear-gradient(180deg,#1b2024,#161a1d);border-radius:5px;
     padding:12px 14px 12px 44px;position:relative;min-width:0;
     container-type:inline-size;container-name:tgt;
   }
-  .tgt::before{
-    content:attr(data-num);
+  /* poignée de glisser-déposer (= rail du numéro) */
+  .t-grip{
     position:absolute;left:0;top:0;bottom:0;width:30px;
     display:flex;align-items:center;justify-content:center;
     font-family:var(--disp);font-weight:700;font-size:15px;color:var(--brass);
     background:#12161a;border-right:1px solid var(--line);letter-spacing:.02em;
+    cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;
   }
+  /* poignée 6 points = « déplaçable » (dessinée en CSS, pas de police), épinglée en haut du rail */
+  .t-grip::before{
+    content:'';position:absolute;top:7px;left:50%;transform:translateX(-50%);
+    width:10px;height:14px;
+    background-image:radial-gradient(var(--line-2) 42%, transparent 46%);
+    background-size:5px 5px;background-repeat:round;
+  }
+  .t-grip:active{cursor:grabbing}
+  .t-grip:hover{color:var(--amber);background:#161b20}
+  .t-grip:hover::before{background-image:radial-gradient(var(--amber) 42%, transparent 46%)}
+  .tgt.dragging{display:none}                 /* l'originale est masquée pendant le glissé */
+  .t-placeholder{border:1px dashed var(--brass);border-radius:5px;
+    background:rgba(193,154,107,.07);min-height:70px;pointer-events:none}
+  /* clone « soulevé » qui suit le curseur */
+  .tgt-ghost{position:fixed;margin:0;z-index:9999;pointer-events:none;will-change:left,top;
+    box-shadow:0 14px 30px rgba(0,0,0,.55);transform:rotate(1.5deg) scale(1.02);opacity:.97}
   .tgt.done{opacity:.5}
   .tgt.done .t-cell .val{text-decoration:line-through;text-decoration-color:var(--line-2)}
   .t-top{display:flex;align-items:center;gap:10px;margin-bottom:2px}
@@ -232,7 +260,7 @@
   /* très petit écran : rail du numéro et bandeau resserrés */
   @media(max-width:440px){
     .tgt{padding:10px 10px 10px 32px}
-    .tgt::before{width:24px;font-size:12px}
+    .t-grip{width:24px;font-size:12px}
     .t-top{gap:7px}
     .t-name{font-size:12px}
     .t-dist{font-size:11px}
@@ -381,7 +409,7 @@
   <section class="panel" style="margin-top:18px">
     <div class="nb-head">
       <h2 style="margin:0" data-i18n="notebook">Carnet de cibles</h2>
-      <span class="counter"><span id="nbFlash" style="color:var(--red);margin-right:8px"></span><b id="tgtCount">0</b> / 8 <span data-i18n="saved_count">enregistrées</span></span>
+      <span class="counter"><span id="nbFlash" style="color:var(--red);margin-right:8px"></span><b id="tgtCount">0</b> / <span id="tgtMax">12</span> <span data-i18n="saved_count">enregistrées</span></span>
     </div>
     <div id="targets" class="targets"></div>
     <div id="nbEmpty" class="nb-empty" data-i18n="nb_empty">
@@ -462,7 +490,10 @@ const I18N = {
     obus:"Obus",
     notebook:"Carnet de cibles",
     saved_count:"enregistrées",
-    nb_empty:"Calcule une solution ci-dessus, puis « Épingler » la charge retenue pour l'ajouter ici. Le carnet garde l'ordre de tir — coche une cible une fois traitée.",
+    gun_left:"Canon gauche",
+    gun_right:"Canon droit",
+    drag_hint:"Glisser pour réordonner ou changer de canon",
+    nb_empty:"Calcule une solution ci-dessus, puis « Épingler » la charge retenue. Les cibles se répartissent entre le canon gauche et le canon droit (6 obus chacun). Glisse une carte par sa poignée pour la réordonner ou la changer de canon.",
     clear_done:"Retirer les cibles traitées",
     clear_all:"Vider le carnet",
     confirm_q:"Confirmer ?",
@@ -529,7 +560,10 @@ const I18N = {
     obus:"Shell",
     notebook:"Target log",
     saved_count:"saved",
-    nb_empty:"Compute a solution above, then “Pin” the chosen charge to add it here. The log keeps firing order — tick a target once handled.",
+    gun_left:"Left gun",
+    gun_right:"Right gun",
+    drag_hint:"Drag to reorder or switch gun",
+    nb_empty:"Compute a solution above, then “Pin” the chosen charge. Targets split between the left and right gun (6 shells each). Drag a card by its handle to reorder it or move it to the other gun.",
     clear_done:"Remove handled targets",
     clear_all:"Clear log",
     confirm_q:"Confirm?",
@@ -650,6 +684,7 @@ function solve(points, dist){
 }
 
 function fmt(n){ return (Math.round(n*100)/100).toFixed(2); }
+function fmtAz(n){ return (Math.round(n*10)/10).toFixed(1); } // azimut : 1 décimale (le jeu ne gère pas les centièmes)
 
 /* ---------- Saisie rapide : boussole + règle ---------- */
 const RULER_MAX = 30;          // portée max du jeu (km)
@@ -926,8 +961,29 @@ document.getElementById('importBtn').onclick=()=>{
 };
 
 /* ---------- Carnet de cibles ---------- */
-const MAX_TARGETS=8;
-let targets=[]; // {name,dist,shell,azim,charge,elev,status,done}
+const GUN_CAP=6;              // obus par magasin (= par canon)
+const MAX_TARGETS=GUN_CAP*2;  // 2 canons : gauche + droite
+let targets=[]; // {name,dist,shell,azim,charge,elev,status,done,gun:'L'|'R'}
+
+/* Canon le moins rempli (égalité → gauche), en respectant la capacité. */
+function gunCount(g){ return targets.filter(t_=>t_.gun===g).length; }
+function nextGun(){
+  if(gunCount('L')>=GUN_CAP) return 'R';
+  if(gunCount('R')>=GUN_CAP) return 'L';
+  return gunCount('L')<=gunCount('R') ? 'L' : 'R';
+}
+/* Garantit que chaque cible a un canon valide et qu'aucun ne dépasse GUN_CAP.
+   Seul point qui pose l'invariant — couvre pin, import OCR, import JSON, drag. */
+function ensureGuns(){
+  targets.forEach(t_=>{ if(t_.gun!=='L'&&t_.gun!=='R') t_.gun=nextGun(); });
+  ['L','R'].forEach(g=>{
+    const other=g==='L'?'R':'L';
+    while(gunCount(g)>GUN_CAP && gunCount(other)<GUN_CAP){
+      // déborde la dernière cible du canon trop plein vers l'autre
+      for(let k=targets.length-1;k>=0;k--){ if(targets[k].gun===g){ targets[k].gun=other; break; } }
+    }
+  });
+}
 
 function flashNb(msg){
   const el=document.getElementById('nbFlash');
@@ -946,28 +1002,43 @@ function pinTarget(charge, elev, status){
   targets.push({
     name:`${t('target')} ${targets.length+1}`,
     dist, shell,
-    azim:Number.isFinite(azim)?azim:null,
-    charge, elev, status, done:false
+    azim:Number.isFinite(azim)?Math.round(azim*10)/10:null,
+    charge, elev, status, done:false, gun:nextGun()
   });
   renderTargets();
 }
 
 function renderTargets(){
+  ensureGuns();
   const wrap=document.getElementById('targets');
   const empty=document.getElementById('nbEmpty');
   const tools=document.getElementById('nbTools');
   document.getElementById('tgtCount').textContent=targets.length;
+  document.getElementById('tgtMax').textContent=MAX_TARGETS;
   wrap.innerHTML='';
   empty.style.display = targets.length?'none':'block';
   tools.style.display = targets.length?'flex':'none';
+  if(!targets.length) return; // carnet vide : juste le message d'invite
+
+  // une colonne par canon (gauche / droite)
+  const lists={}, heads={}, counts={L:0,R:0};
+  [['L','gun_left'],['R','gun_right']].forEach(([g])=>{
+    const col=document.createElement('div'); col.className='gun-col'; col.dataset.gun=g;
+    const hd=document.createElement('div'); hd.className='gun-hd';
+    const list=document.createElement('div'); list.className='gun-list'; list.dataset.gun=g;
+    col.appendChild(hd); col.appendChild(list); wrap.appendChild(col);
+    lists[g]=list; heads[g]=hd;
+  });
 
   targets.forEach((t_,i)=>{
+    const g = t_.gun==='R' ? 'R' : 'L';
+    const num = ++counts[g];
     const card=document.createElement('div');
     card.className='tgt'+(t_.done?' done':'');
-    card.setAttribute('data-num', String(i+1).padStart(2,'0'));
+    card.dataset.i=i; card.dataset.gun=g;
     const warn = (t_.status==='single')?`<div class="t-warn">${t('warn_single')}</div>`:'';
     const azVal = t_.azim!==null
-      ? `${fmt(t_.azim)}<small>°</small>`
+      ? `${fmtAz(t_.azim)}<small>°</small>`
       : `—`;
     const azEmpty = t_.azim!==null ? '' : ' empty';
     const sh = shellByName(t_.shell);
@@ -975,6 +1046,7 @@ function renderTargets(){
     const obusVal = sh ? sh.abbr : '—';
     const obusNone = sh ? '' : ' none';
     card.innerHTML=
+      `<div class="t-grip" title="${t('drag_hint')}" aria-label="${t('drag_hint')}">${String(num).padStart(2,'0')}</div>`+
       `<div class="t-top">`+
         `<div class="t-name-wrap">`+
           nameIcon+
@@ -992,8 +1064,20 @@ function renderTargets(){
         `<div class="t-cell obus${obusNone} clickable" data-obus="${i}" title="${sh?sh.name+' — '+sh.cat[LANG]:t('obus_pick')}"><div class="lab">${t('obus')}</div><div class="val">${obusVal}</div></div>`+
         `<div class="t-cell charge clickable" data-charge="${i}" title="${t('charge_pick')}"><div class="lab">${t('charge')}</div><div class="val">${t_.charge}</div></div>`+
       `</div>`+warn;
-    wrap.appendChild(card);
+    lists[g].appendChild(card);
   });
+
+  // en-têtes : nom du canon + jauge de remplissage + compteur X/6
+  [['L','gun_left'],['R','gun_right']].forEach(([g,key])=>{
+    let pips='';
+    for(let k=0;k<GUN_CAP;k++) pips+=`<span class="gun-pip ${k<counts[g]?'on':''}"></span>`;
+    heads[g].innerHTML=
+      `<span class="g-name">${t(key)}</span>`+
+      `<span class="gun-pips">${pips}</span>`+
+      `<span class="g-count"><b>${counts[g]}</b>/${GUN_CAP}</span>`;
+  });
+
+  wrap.querySelectorAll('.t-grip').forEach(gp=>gp.addEventListener('pointerdown', onGripDown));
 
   wrap.querySelectorAll('.t-name').forEach(inp=>{
     inp.oninput=()=>{ targets[+inp.dataset.i].name=inp.value; };
@@ -1013,6 +1097,73 @@ function renderTargets(){
     cell.oncontextmenu=(e)=>{ e.preventDefault(); cycleShell(+cell.dataset.obus, -1); };
   });
 }
+
+/* ---------- Glisser-déposer : réordonner / changer de canon ----------
+   Pointer events → marche à la souris ET au tactile. On attrape une carte
+   par sa poignée (le rail du numéro). Le placeholder montre où elle atterrira ;
+   un canon plein (GUN_CAP) refuse le dépôt d'une carte venue de l'autre canon. */
+let drag=null;
+function onGripDown(e){
+  if(e.button>0) return;               // souris : bouton gauche seulement
+  const card=e.currentTarget.closest('.tgt');
+  if(!card) return;
+  e.preventDefault();
+  const r=card.getBoundingClientRect();
+  // pointillé d'atterrissage, à la taille exacte de la carte (le layout ne saute pas)
+  const ph=document.createElement('div');
+  ph.className='t-placeholder';
+  ph.style.height=r.height+'px';
+  card.parentNode.insertBefore(ph, card.nextSibling);
+  // clone visible qui suit le curseur
+  const ghost=card.cloneNode(true);
+  ghost.classList.add('tgt-ghost');
+  ghost.style.width=r.width+'px';
+  ghost.style.left=r.left+'px';
+  ghost.style.top=r.top+'px';
+  document.body.appendChild(ghost);
+  drag={card, i:+card.dataset.i, ph, ghost, offX:e.clientX-r.left, offY:e.clientY-r.top};
+  card.classList.add('dragging');     // display:none → masquée + invisible à elementFromPoint
+}
+function onPointerMove(e){
+  if(!drag) return;
+  drag.ghost.style.left=(e.clientX-drag.offX)+'px';
+  drag.ghost.style.top=(e.clientY-drag.offY)+'px';
+  const el=document.elementFromPoint(e.clientX, e.clientY);
+  const list=el && el.closest('.gun-list');
+  if(!list) return;
+  // refuser un canon plein si la carte vient de l'autre canon
+  const destGun=list.dataset.gun, srcGun=targets[drag.i].gun;
+  if(destGun!==srcGun && gunCount(destGun)>=GUN_CAP) return;
+  // balayage déterministe : insérer avant la 1re carte dont le milieu passe sous le curseur.
+  // Indépendant de ce qui est pile sous le pointeur → pas de scintillement sur le pointillé.
+  const cards=[...list.querySelectorAll('.tgt:not(.dragging)')];
+  const ref=cards.find(c=>{ const r=c.getBoundingClientRect(); return e.clientY < r.top + r.height/2; });
+  if(ref) list.insertBefore(drag.ph, ref);
+  else list.appendChild(drag.ph);
+}
+function onPointerUp(){
+  if(!drag) return;
+  const {card, ph, ghost}=drag;
+  if(ph.parentNode) ph.parentNode.insertBefore(card, ph);
+  ph.remove();
+  ghost.remove();
+  card.classList.remove('dragging');
+  // reconstruit targets dans le nouvel ordre visuel + canon de la colonne
+  const order=[];
+  document.querySelectorAll('#targets .gun-list').forEach(list=>{
+    const g=list.dataset.gun;
+    list.querySelectorAll('.tgt').forEach(c=>{
+      const tg=targets[+c.dataset.i];
+      if(tg){ tg.gun=g; order.push(tg); }
+    });
+  });
+  targets=order;
+  drag=null;
+  renderTargets();
+}
+window.addEventListener('pointermove', onPointerMove);
+window.addEventListener('pointerup', onPointerUp);
+window.addEventListener('pointercancel', onPointerUp);
 
 /* Cycle l'obus d'une cible : aucun → 7 obus → aucun */
 function cycleShell(i, dir){
@@ -1164,7 +1315,7 @@ function addOcrTargets(){
       dist:Math.round(r.dist*100)/100,
       shell:'',
       azim: azOk ? Math.round(r.azim*10)/10 : null,
-      charge:chosen.c, elev:chosen.elev, status:chosen.status, done:false
+      charge:chosen.c, elev:chosen.elev, status:chosen.status, done:false, gun:nextGun()
     });
     added++;
   }
